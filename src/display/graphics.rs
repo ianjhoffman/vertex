@@ -69,14 +69,13 @@ impl Graphics {
         // Set up and buffer position/color index attributes
         let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
         let color_attrib = self.context.get_attrib_location(&shader.program, "color") as u32;
-
         self.buffer_f32_data(vertex_positions, pos_attrib, 2);
         self.buffer_f32_data(vertex_colors, color_attrib, 1);
         self.buffer_u32_indices(indices);
 
         // Set color uniform
         let colors_uniform = shader.get_uniform_location(&self.context, "colors");
-        self.context.uniform3fv_with_f32_array(colors_uniform, colors);
+        self.context.uniform3fv_with_f32_array(colors_uniform.as_ref(), colors);
 
         // Draw triangles
         self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_INT, 0);
@@ -86,8 +85,11 @@ impl Graphics {
         let shader = self.shaders.get(&ShaderKind::Lines).unwrap();
         self.context.use_program(Some(&shader.program));
 
-        // TODO
+        // Set up and buffer position attribute
+        let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
+        self.buffer_f32_data(vertices, pos_attrib, 2);
 
+        // Draw disconnected lines
         self.context.draw_arrays(GL::LINES, 0, (vertices.len() >> 1) as i32);
     }
 
@@ -95,8 +97,15 @@ impl Graphics {
         let shader = self.shaders.get(&ShaderKind::Points).unwrap();
         self.context.use_program(Some(&shader.program));
 
-        // TODO
+        // Set up and buffer position/index attributes
+        let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
+        let idx_attrib = self.context.get_attrib_location(&shader.program, "index") as u32;
+        self.buffer_f32_data(vertex_positions, pos_attrib, 2);
+        self.buffer_f32_data(vertex_indices, idx_attrib, 1);
 
+        // Later - we'll need to send a uniform for the selected vertex index
+
+        // Draw points
         self.context.draw_arrays(GL::POINTS, 0, vertex_indices.len() as i32);
     }
 

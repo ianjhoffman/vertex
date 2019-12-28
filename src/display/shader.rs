@@ -36,7 +36,7 @@ impl Shader {
         &self,
         gl: &WebGlRenderingContext,
         uniform_name: &str,
-    ) -> Option<&WebGlUniformLocation> {
+    ) -> Option<WebGlUniformLocation> {
         let mut uniforms = self.uniforms.borrow_mut();
 
         if uniforms.get(uniform_name).is_none() {
@@ -47,7 +47,7 @@ impl Shader {
             );
         }
 
-        uniforms.get(uniform_name)
+        Some(uniforms.get(uniform_name).expect("loc").clone())
     }
 }
 
