@@ -3,7 +3,7 @@ use super::super::geometry::{StaticGraphicsData, DynamicGraphicsData};
 use std::rc::Rc;
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
-use web_sys::WebGlRenderingContext;
+use web_sys::WebGlRenderingContext as GL;
 
 static TRIANGLE_VS: &'static str = include_str!("./shaders/triangle-vertex.glsl");
 static TRIANGLE_FS: &'static str = include_str!("./shaders/triangle-fragment.glsl");
@@ -13,7 +13,7 @@ static POINT_VS: &'static str = include_str!("./shaders/point-vertex.glsl");
 static POINT_FS: &'static str = include_str!("./shaders/point-fragment.glsl");
 
 pub struct Graphics {
-    context: Rc<WebGlRenderingContext>,
+    context: Rc<GL>,
     shaders: HashMap<ShaderKind, Shader>,
 }
 
@@ -22,7 +22,7 @@ impl Graphics {
         let context = canvas.get_context("webgl")
             .map_err(|_| GraphicsError::ContextFailed)?
             .ok_or(GraphicsError::ContextFailed)?
-            .dyn_into::<WebGlRenderingContext>().map_err(|_| GraphicsError::ContextFailed)?;
+            .dyn_into::<GL>().map_err(|_| GraphicsError::ContextFailed)?;
 
         let mut ret = Graphics{
             context: Rc::new(context),
@@ -36,6 +36,23 @@ impl Graphics {
     }
 
     pub fn draw(&self, static_data: &StaticGraphicsData, dynamic_data: &DynamicGraphicsData) {
+        self.context.clear_color(0.5, 0.5, 0.5, 1.0);
+        self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
+        self.context.viewport(0, 0, 200, 200);
+        self.draw_triangles();
+        self.draw_lines();
+        self.draw_points();
+    }
 
+    fn draw_triangles(&self) {
+
+    }
+
+    fn draw_lines(&self) {
+        
+    }
+
+    fn draw_points(&self) {
+        
     }
 }
