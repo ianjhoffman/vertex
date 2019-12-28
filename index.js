@@ -2,7 +2,8 @@ import init, { run } from './pkg/vertex.js';
 
 async function run_wasm() {
     await init();
-    fetch('/puzzles/1.txt')
+    var puzzle = window.prompt("Select a puzzle number", "1");
+    fetch(`/puzzles/${puzzle}.txt`)
         .then((res) => res.text())
         .then((text) => {
             run(text);
