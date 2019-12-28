@@ -16,7 +16,7 @@ quick_error! {
 pub struct PuzzleData {
     vertices: Vec<(f32, f32)>, // x, y
     triangles: Vec<[u32; 4]>, // v0, v1, v2, color
-    colors: Vec<(u8, u8, u8)>, // r, g, b
+    colors: Vec<[u8; 3]>, // r, g, b
     edge_to_triangles: HashMap<(u32, u32), Vec<usize>>, // v0, v1 -> triangle indices (edge indices are sorted)
 }
 
@@ -41,11 +41,11 @@ impl PuzzleData {
                     ));
                 },
                 3 => { // RGB color
-                    out.colors.push((
+                    out.colors.push([
                         split[0].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?,
                         split[1].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?,
                         split[2].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?
-                    ));
+                    ]);
                 },
                 4 => { // triangle
                     let triangle_indices = split.iter().take(3).map(|s| {
@@ -109,16 +109,22 @@ impl PuzzleData {
 // Should only need to ever make one of these per puzzle
 pub struct StaticGraphicsData {
     pub num_vertices: usize,
-    pub triangle_vertices: Vec<f32>,
-    pub point_vertices: Vec<f32>,
+    pub triangle_position_vertices: Vec<f32>,
+    pub triangle_color_idx_vertices: Vec<f32>,
+    pub point_position_vertices: Vec<f32>,
+    pub point_idx_vertices: Vec<f32>,
+    pub colors_uniform: Vec<u8>,
 }
 
 impl StaticGraphicsData {
     fn from_data(data: &PuzzleData) -> StaticGraphicsData {
         let mut out = StaticGraphicsData {
             num_vertices: data.vertices.len(),
-            triangle_vertices: vec![],
-            point_vertices: vec![],
+            triangle_position_vertices: vec![],
+            triangle_color_idx_vertices: vec![],
+            point_position_vertices: vec![],
+            point_idx_vertices: vec![],
+            colors_uniform: vec![],
         };
 
         for triangle in &data.triangles {
@@ -127,13 +133,19 @@ impl StaticGraphicsData {
             let color_idx = triangle[3];
             for &vert_idx in &triangle[0..3] {
                 let (x, y) = &data.vertices[vert_idx as usize];
-                out.triangle_vertices.append(&mut vec![*x, *y, color_idx as f32]);
+                out.triangle_position_vertices.append(&mut vec![*x, *y]);
+                out.triangle_color_idx_vertices.push(color_idx as f32);
             }
         }
 
         for (idx, &(x, y)) in (&data.vertices).iter().enumerate() {
             // The second attribute of a line/point vertex is which vertex it is (for highlighting)
-            out.point_vertices.append(&mut vec![x, y, idx as f32]);
+            out.point_position_vertices.append(&mut vec![x, y]);
+            out.point_idx_vertices.push(idx as f32);
+        }
+
+        for color in &data.colors {
+            out.colors_uniform.append(&mut color.to_vec());
         }
 
         out

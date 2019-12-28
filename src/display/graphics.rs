@@ -39,20 +39,33 @@ impl Graphics {
         self.context.clear_color(0.5, 0.5, 0.5, 1.0);
         self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
         self.context.viewport(0, 0, 200, 200);
-        self.draw_triangles();
-        self.draw_lines();
-        self.draw_points();
+
+        self.draw_triangles(
+            &static_data.triangle_position_vertices,
+            &static_data.triangle_color_idx_vertices,
+            &dynamic_data.triangle_indices
+        );
+
+        self.draw_lines(&dynamic_data.line_vertices);
+
+        self.draw_points(
+            &static_data.point_position_vertices,
+            &static_data.point_idx_vertices,
+        );
     }
 
-    fn draw_triangles(&self) {
-
+    fn draw_triangles(&self, vertex_positions: &Vec<f32>, vertex_colors: &Vec<f32>, indices: &Vec<u32>) {
+        let shader = self.shaders.get(&ShaderKind::Triangles).unwrap();
+        self.context.use_program(Some(&shader.program));
     }
 
-    fn draw_lines(&self) {
-        
+    fn draw_lines(&self, vertices: &Vec<f32>) {
+        let shader = self.shaders.get(&ShaderKind::Lines).unwrap();
+        self.context.use_program(Some(&shader.program));
     }
 
-    fn draw_points(&self) {
-        
+    fn draw_points(&self, vertex_positions: &Vec<f32>, vertex_indices: &Vec<f32>) {
+        let shader = self.shaders.get(&ShaderKind::Points).unwrap();
+        self.context.use_program(Some(&shader.program));
     }
 }
