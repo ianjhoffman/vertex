@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
 use js_sys::WebAssembly;
+use nalgebra_glm::{TVec4, TMat4};
 
 static TRIANGLE_VS: &'static str = include_str!("./shaders/triangle-vertex.glsl");
 static TRIANGLE_FS: &'static str = include_str!("./shaders/triangle-fragment.glsl");
@@ -13,10 +14,15 @@ static LINE_FS: &'static str = include_str!("./shaders/line-fragment.glsl");
 static POINT_VS: &'static str = include_str!("./shaders/point-vertex.glsl");
 static POINT_FS: &'static str = include_str!("./shaders/point-fragment.glsl");
 
+const DEFAULT_CLEAR_COLOR: [f32; 4] = [0.8, 0.8, 0.8, 1.0];
+
 pub struct Graphics {
     context: Rc<GL>,
     shaders: HashMap<ShaderKind, Shader>,
     window_size: (u32, u32),
+    clear_color: [f32; 4],
+    view_matrix: TMat4<f32>,
+    viewport: TVec4<f32>,
 }
 
 impl Graphics {
@@ -30,6 +36,9 @@ impl Graphics {
             context: Rc::new(context),
             shaders: HashMap::new(),
             window_size: (canvas.width(), canvas.height()),
+            clear_color: DEFAULT_CLEAR_COLOR,
+            view_matrix: nalgebra_glm::ortho(-3.0, 3.0, -3.0, 3.0, 0.1, 1000.0),
+            viewport: nalgebra_glm::make_vec4(&[0., 0., canvas.width() as f32, canvas.height() as f32]),
         };
 
         ret.shaders.insert(ShaderKind::Triangles, Shader::new(&ret.context, TRIANGLE_VS, TRIANGLE_FS)?);
@@ -38,27 +47,25 @@ impl Graphics {
         Ok(ret)
     }
 
-    fn get_view_matrix(left: f32, right: f32, bottom: f32, top: f32, zfar: f32, znear: f32) -> [f32; 16] {
-        let mut out = [0.0; 16];
-
-        out[0] = 2.0 / (right - left);
-        out[5] = 2.0 / (top - bottom);
-        out[10] = -2.0 / (zfar - znear);
-        out[12] = -(right + left) / (right - left);
-        out[13] = -(top + bottom) / (top - bottom);
-        out[14] = -(zfar + znear) / (zfar - znear);
-        out[15] = 1.0;
-
-        out
+    // Take x, y pixels and map them to model space
+    pub fn unproject(&self, x: i32, y: i32) -> (f32, f32) {
+        let unprojected = nalgebra_glm::unproject(
+            // Need to invert the y since canvas +Y goes downwards
+            &nalgebra_glm::make_vec3(&[x as f32, (self.window_size.1 as i32 - y) as f32, 0.]),
+            &nalgebra_glm::identity(),
+            &self.view_matrix,
+            self.viewport
+        );
+        (unprojected.x, unprojected.y)
     }
 
     pub fn draw(&self, static_data: &StaticGraphicsData, dynamic_data: &DynamicGraphicsData) {
-        self.context.clear_color(0.5, 0.5, 0.5, 1.0);
+        self.context.clear_color(self.clear_color[0], self.clear_color[1], self.clear_color[2], self.clear_color[3]);
         self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
         self.context.viewport(0, 0, self.window_size.0 as i32, self.window_size.1 as i32);
 
-        // TODO - when we start being able to change FOV, make this settable
-        let view_matrix = Graphics::get_view_matrix(-3.0, 3.0, -3.0, 3.0, 0.1, 1000.0);
+        let mut view_matrix = [0.; 16];
+        view_matrix.clone_from_slice(self.view_matrix.as_slice());
 
         self.draw_triangles(
             &view_matrix,
@@ -78,6 +85,10 @@ impl Graphics {
             &static_data.point_position_vertices,
             &static_data.point_idx_vertices,
         );
+    }
+
+    pub fn set_clear_color(&mut self, color: [f32; 4]) {
+        self.clear_color = color;
     }
 
     fn draw_triangles(

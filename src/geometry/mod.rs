@@ -104,6 +104,15 @@ impl PuzzleData {
     pub fn get_dynamic_graphics_data(&self, state: &PuzzleState) -> DynamicGraphicsData {
         DynamicGraphicsData::from_data_and_state(self, state)
     }
+
+    pub fn get_vertex_near(&self, x: f32, y: f32, threshold: f32) -> Option<u32> {
+        for (idx, vertex) in (&self.vertices).iter().enumerate() {
+            if (vertex.0 - x).hypot(vertex.1 - y) <= threshold {
+                return Some(idx as u32)
+            }
+        }
+        None
+    }
 }
 
 // Should only need to ever make one of these per puzzle
