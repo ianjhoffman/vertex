@@ -16,6 +16,7 @@ static POINT_FS: &'static str = include_str!("./shaders/point-fragment.glsl");
 pub struct Graphics {
     context: Rc<GL>,
     shaders: HashMap<ShaderKind, Shader>,
+    window_size: (u32, u32),
 }
 
 impl Graphics {
@@ -28,6 +29,7 @@ impl Graphics {
         let mut ret = Graphics{
             context: Rc::new(context),
             shaders: HashMap::new(),
+            window_size: (canvas.width(), canvas.height()),
         };
 
         ret.shaders.insert(ShaderKind::Triangles, Shader::new(&ret.context, TRIANGLE_VS, TRIANGLE_FS)?);
@@ -53,7 +55,7 @@ impl Graphics {
     pub fn draw(&self, static_data: &StaticGraphicsData, dynamic_data: &DynamicGraphicsData) {
         self.context.clear_color(0.5, 0.5, 0.5, 1.0);
         self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
-        self.context.viewport(0, 0, 200, 200);
+        self.context.viewport(0, 0, self.window_size.0 as i32, self.window_size.1 as i32);
 
         // TODO - when we start being able to change FOV, make this settable
         let view_matrix = Graphics::get_view_matrix(-3.0, 3.0, -3.0, 3.0, 0.1, 1000.0);
