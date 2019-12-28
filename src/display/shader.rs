@@ -7,7 +7,9 @@ use web_sys::{WebGlProgram, WebGlRenderingContext, WebGlShader, WebGlUniformLoca
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum ShaderKind {
-    Triangles
+    Triangles,
+    Lines,
+    Points
 }
 
 pub struct Shader {

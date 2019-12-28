@@ -6,7 +6,6 @@ mod display;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-//use web_sys::{WebGlProgram, WebGlRenderingContext, WebGlShader};
 
 fn window() -> Result<web_sys::Window, JsValue> {
     web_sys::window().ok_or("No global window exists".into())
@@ -23,19 +22,8 @@ fn get_canvas() -> Result<web_sys::HtmlCanvasElement, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn run() -> Result<(), JsValue> {
-    let data = vec![
-        "-1 -1",
-        "1 -1",
-        "1 1",
-        "-1 1",
-        "255 0 0",
-        "0 0 255",
-        "0 1 2 1",
-        "0 2 3 0",
-    ].join("\n");
-
-    let puzzle_data = geometry::PuzzleData::from_reader(&mut data.as_bytes()).map_err(|e| e.to_string())?;
+pub fn run(puzzle: &str) -> Result<(), JsValue> {
+    let puzzle_data = geometry::PuzzleData::from_reader(&mut puzzle.as_bytes()).map_err(|e| e.to_string())?;
     let mut puzzle_state = puzzle_state::PuzzleState::from_data(&puzzle_data);
     let mut graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
 

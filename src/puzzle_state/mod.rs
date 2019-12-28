@@ -47,4 +47,6 @@ impl PuzzleState {
     }
 
     pub fn is_finished(&self) -> bool { self.unlocked_triangles.len() == self.triangle_reqs.len() }
+    pub fn get_connected_edges(&self) -> &HashSet<(u32, u32)> { &self.connected_edges }
+    pub fn get_unlocked_triangles(&self) -> &HashSet<usize> { &self.unlocked_triangles }
 }

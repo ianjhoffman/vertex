@@ -1,5 +1,6 @@
 use std::io::BufRead;
 use std::collections::HashMap;
+use super::puzzle_state::PuzzleState;
 
 quick_error! {
     #[derive(Debug)]
@@ -14,7 +15,7 @@ quick_error! {
 #[derive(Debug)]
 pub struct PuzzleData {
     vertices: Vec<(f32, f32)>, // x, y
-    triangles: Vec<(u32, u32, u32, u32)>, // v0, v1, v2, color
+    triangles: Vec<[u32; 4]>, // v0, v1, v2, color
     colors: Vec<(u8, u8, u8)>, // r, g, b
     edge_to_triangles: HashMap<(u32, u32), Vec<usize>>, // v0, v1 -> triangle indices (edge indices are sorted)
 }
@@ -63,22 +64,22 @@ impl PuzzleData {
                     let color_idx = split[3].parse::<u32>().map_err(|_| GeometryError::InvalidTriangle)?;
                     if color_idx as usize > out.colors.len() { return Err(GeometryError::InvalidTriangle); }
 
-                    out.triangles.push((
+                    out.triangles.push([
                         triangle_indices[0],
                         triangle_indices[1],
                         triangle_indices[2],
                         color_idx
-                    ));
+                    ]);
                 },
                 _ => return Err(GeometryError::ParseFailure)
             }
         }
 
         // Construct edge to triangle membership map
-        for (idx, (v0, v1, v2, _)) in (&out.triangles).iter().enumerate() {
-            let mut sorted = vec![v0, v1, v2];
+        for (idx, triangle_data) in (&out.triangles).iter().enumerate() {
+            let mut sorted = triangle_data[0..3].to_vec();
             sorted.sort();
-            for (&e0, &e1) in vec![(sorted[0], sorted[1]), (sorted[1], sorted[2]), (sorted[0], sorted[2])] {
+            for (e0, e1) in vec![(sorted[0], sorted[1]), (sorted[1], sorted[2]), (sorted[0], sorted[2])] {
                 out.edge_to_triangles.entry((e0, e1)).or_insert(vec![]).push(idx);
             }
         }
@@ -94,5 +95,74 @@ impl PuzzleData {
 
     pub fn is_valid_edge(&self, edge: &(u32, u32)) -> bool {
         (edge.0 as usize) < self.vertices.len() && (edge.1 as usize) < self.vertices.len()
+    }
+
+    pub fn get_static_graphics_data(&self) -> StaticGraphicsData {
+        StaticGraphicsData::from_data(self)
+    }
+
+    pub fn get_dynamic_graphics_data(&self, state: &PuzzleState) -> DynamicGraphicsData {
+        DynamicGraphicsData::from_data_and_state(self, state)
+    }
+}
+
+// Should only need to ever make one of these per puzzle
+pub struct StaticGraphicsData {
+    pub num_vertices: usize,
+    pub triangle_vertices: Vec<f32>,
+    pub point_vertices: Vec<f32>,
+}
+
+impl StaticGraphicsData {
+    fn from_data(data: &PuzzleData) -> StaticGraphicsData {
+        let mut out = StaticGraphicsData {
+            num_vertices: data.vertices.len(),
+            triangle_vertices: vec![],
+            point_vertices: vec![],
+        };
+
+        for triangle in &data.triangles {
+            // We need to make multiple copies of vertices for each triangle that uses them
+            // The second attribute of a triangle vertex is the color index in the color array uniform
+            let color_idx = triangle[3];
+            for &vert_idx in &triangle[0..3] {
+                let (x, y) = &data.vertices[vert_idx as usize];
+                out.triangle_vertices.append(&mut vec![*x, *y, color_idx as f32]);
+            }
+        }
+
+        for (idx, &(x, y)) in (&data.vertices).iter().enumerate() {
+            // The second attribute of a line/point vertex is which vertex it is (for highlighting)
+            out.point_vertices.append(&mut vec![x, y, idx as f32]);
+        }
+
+        out
+    }
+}
+
+// Need to make one one of these for every frame
+pub struct DynamicGraphicsData {
+    pub triangle_indices: Vec<u32>,
+    pub line_vertices: Vec<f32>,
+}
+
+impl DynamicGraphicsData {
+    fn from_data_and_state(data: &PuzzleData, state: &PuzzleState) -> DynamicGraphicsData {
+        let mut out = DynamicGraphicsData {
+            triangle_indices: vec![],
+            line_vertices: vec![],
+        };
+
+        for &(start, end) in state.get_connected_edges() {
+            let ((start_x, start_y), (end_x, end_y)) = (data.vertices[start as usize], data.vertices[end as usize]);
+            out.line_vertices.append(&mut vec![start_x, start_y, end_x, end_y]);
+        }
+
+        for &idx in state.get_unlocked_triangles() {
+            let base = idx as u32 * 3;
+            out.triangle_indices.append(&mut vec![base, base + 1, base + 2]);
+        }
+
+        out
     }
 }
