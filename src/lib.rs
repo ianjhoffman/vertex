@@ -27,7 +27,11 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
     let mut puzzle_state = puzzle_state::PuzzleState::from_data(&puzzle_data);
     let mut graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
 
+    let static_geometry = puzzle_data.get_static_graphics_data();
+    let mut dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
+
     while !puzzle_state.is_finished() {
+        graphics.draw(&static_geometry, &dynamic_geometry);
         if let Some(message) = window()?.prompt_with_message("Unlock an edge")? {
             let split = message.split_whitespace().collect::<Vec<&str>>();
             if split.len() != 2 {
@@ -42,6 +46,7 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
                 }
                 puzzle_state.connect_edge(&puzzle_data, &edge);
                 alert(&format!("Unlocked edge: {:?}!", edge))?;
+                dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
             } else {
                 alert(&format!("Invalid edge: {}", message))?;
                 continue
