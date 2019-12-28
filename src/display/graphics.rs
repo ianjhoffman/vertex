@@ -1,7 +1,7 @@
 use super::{error::*, shader::*};
 use super::super::geometry::{StaticGraphicsData, DynamicGraphicsData};
 use std::rc::Rc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
 use js_sys::WebAssembly;
@@ -59,6 +59,10 @@ impl Graphics {
         (unprojected.x, unprojected.y)
     }
 
+    pub fn set_bounds(&mut self, lower: (f32, f32), upper: (f32, f32)) {
+        self.view_matrix = nalgebra_glm::ortho(lower.0 - 1.0, upper.0 + 1.0, lower.1 - 1.0, upper.1 + 1.0, 0.1, 1000.0);
+    }
+
     pub fn draw(&self, static_data: &StaticGraphicsData, dynamic_data: &DynamicGraphicsData) {
         self.context.clear_color(self.clear_color[0], self.clear_color[1], self.clear_color[2], self.clear_color[3]);
         self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
@@ -84,6 +88,7 @@ impl Graphics {
             &view_matrix,
             &static_data.point_position_vertices,
             &static_data.point_idx_vertices,
+            &dynamic_data.selected_vertices,
         );
     }
 
@@ -148,7 +153,8 @@ impl Graphics {
         &self, 
         view_matrix: &[f32; 16],
         vertex_positions: &Vec<f32>,
-        vertex_indices: &Vec<f32>
+        vertex_indices: &Vec<f32>,
+        selected: &HashSet<u32>,
     ){
         if vertex_indices.len() == 0 { return }
 
@@ -161,7 +167,10 @@ impl Graphics {
         self.buffer_f32_data(vertex_positions, pos_attrib, 2);
         self.buffer_f32_data(vertex_indices, idx_attrib, 1);
 
-        // Later - we'll need to send a uniform for the selected vertex index
+        // Set uniform for selected vertices
+        let s_padded = selected.iter().map(|&i| i as i32).chain(std::iter::repeat(-1)).take(2).collect::<Vec<i32>>();
+        let selected_vertices_uniform = shader.get_uniform_location(&self.context, "selected");
+        self.context.uniform1iv_with_i32_array(selected_vertices_uniform.as_ref(), s_padded.as_slice());
 
         // Set view matrix uniform
         let view_matrix_uniform = shader.get_uniform_location(&self.context, "viewMatrix");

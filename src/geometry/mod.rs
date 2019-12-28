@@ -1,5 +1,5 @@
 use std::io::BufRead;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use super::puzzle_state::PuzzleState;
 
 quick_error! {
@@ -18,6 +18,8 @@ pub struct PuzzleData {
     triangles: Vec<[u32; 4]>, // v0, v1, v2, color
     colors: Vec<[f32; 3]>, // r, g, b (0-1 float)
     edge_to_triangles: HashMap<(u32, u32), Vec<usize>>, // v0, v1 -> triangle indices (edge indices are sorted)
+    lower_bounds: (f32, f32),
+    upper_bounds: (f32, f32),
 }
 
 impl PuzzleData {
@@ -27,6 +29,8 @@ impl PuzzleData {
             triangles: vec![],
             colors: vec![],
             edge_to_triangles: HashMap::new(),
+            lower_bounds: (std::f32::MAX, std::f32::MAX),
+            upper_bounds: (std::f32::MIN, std::f32::MIN),
         };
 
         // Parse geometry and colors
@@ -35,10 +39,17 @@ impl PuzzleData {
             let split: Vec<&str> = l.split_whitespace().collect();
             match split.len() {
                 2 => { // vertex
-                    out.vertices.push((
+                    let to_push = (
                         split[0].parse::<f32>().map_err(|_| GeometryError::InvalidVertex)?,
                         split[1].parse::<f32>().map_err(|_| GeometryError::InvalidVertex)?
-                    ));
+                    );
+
+                    if to_push.0 < out.lower_bounds.0 { out.lower_bounds.0 = to_push.0; }
+                    if to_push.1 < out.lower_bounds.1 { out.lower_bounds.1 = to_push.1; }
+                    if to_push.0 > out.upper_bounds.0 { out.upper_bounds.0 = to_push.0; }
+                    if to_push.1 > out.upper_bounds.1 { out.upper_bounds.1 = to_push.1; }
+
+                    out.vertices.push(to_push);
                 },
                 3 => { // RGB color
                     out.colors.push([
@@ -101,18 +112,30 @@ impl PuzzleData {
         StaticGraphicsData::from_data(self)
     }
 
-    pub fn get_dynamic_graphics_data(&self, state: &PuzzleState) -> DynamicGraphicsData {
-        DynamicGraphicsData::from_data_and_state(self, state)
+    pub fn get_dynamic_graphics_data(
+        &self,
+        state: &PuzzleState,
+        last_vertex: &Option<u32>,
+        curr_pointer: &Option<(f32, f32)>,
+    ) -> DynamicGraphicsData {
+        DynamicGraphicsData::from_data_and_state(
+            self,
+            state,
+            &InteractiveFeatures::from_data_and_interact_info(self, last_vertex, curr_pointer)
+        )
     }
 
-    pub fn get_vertex_near(&self, x: f32, y: f32, threshold: f32) -> Option<u32> {
+    pub fn get_vertex_near(&self, point: (f32, f32), threshold: f32) -> Option<u32> {
         for (idx, vertex) in (&self.vertices).iter().enumerate() {
-            if (vertex.0 - x).hypot(vertex.1 - y) <= threshold {
+            if (vertex.0 - point.0).hypot(vertex.1 - point.1) <= threshold {
                 return Some(idx as u32)
             }
         }
         None
     }
+
+    pub fn get_lower_bounds(&self) -> (f32, f32) { self.lower_bounds }
+    pub fn get_upper_bounds(&self) -> (f32, f32) { self.upper_bounds }
 }
 
 // Should only need to ever make one of these per puzzle
@@ -165,13 +188,19 @@ impl StaticGraphicsData {
 // Need to make one one of these for every frame
 #[derive(Debug)]
 pub struct DynamicGraphicsData {
+    pub selected_vertices: HashSet<u32>,
     pub triangle_indices: Vec<u16>,
     pub line_vertices: Vec<f32>,
 }
 
 impl DynamicGraphicsData {
-    fn from_data_and_state(data: &PuzzleData, state: &PuzzleState) -> DynamicGraphicsData {
+    fn from_data_and_state(
+        data: &PuzzleData,
+        state: &PuzzleState,
+        interactive: &InteractiveFeatures,
+    ) -> DynamicGraphicsData {
         let mut out = DynamicGraphicsData {
+            selected_vertices: interactive.selected_vertices.clone(),
             triangle_indices: vec![],
             line_vertices: vec![],
         };
@@ -184,6 +213,37 @@ impl DynamicGraphicsData {
         for &idx in state.get_unlocked_triangles() {
             let base = idx as u16 * 3;
             out.triangle_indices.append(&mut vec![base, base + 1, base + 2]);
+        }
+
+        if let Some(((x1, y1), (x2, y2))) = interactive.active_edge {
+            out.line_vertices.append(&mut vec![x1, y1, x2, y2]);
+        }
+
+        out
+    }
+}
+
+pub struct InteractiveFeatures {
+    active_edge: Option<((f32, f32), (f32, f32))>,
+    selected_vertices: HashSet<u32>,
+}
+
+impl InteractiveFeatures {
+    fn from_data_and_interact_info(
+        data: &PuzzleData,
+        last_vertex: &Option<u32>,
+        curr_pointer: &Option<(f32, f32)>
+    ) -> InteractiveFeatures {
+        let mut out = InteractiveFeatures {
+            active_edge: None,
+            selected_vertices: HashSet::new(),
+        };
+
+        let curr_pointer_vert = curr_pointer.and_then(|p| data.get_vertex_near(p, 0.12));
+        if let Some(v) = last_vertex { out.selected_vertices.insert(*v); }
+        if let Some(v) = curr_pointer_vert { out.selected_vertices.insert(v); }
+        if let (Some(v), Some(p2)) = (last_vertex, curr_pointer) {
+            out.active_edge = Some((data.vertices[*v as usize], *p2));
         }
 
         out

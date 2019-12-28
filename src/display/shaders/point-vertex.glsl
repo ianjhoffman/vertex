@@ -2,13 +2,14 @@ attribute vec2 position;
 attribute float index;
 
 uniform mat4 viewMatrix;
+uniform int selected[2];
 
 void main() {
-    // Just so index is used and not optimized away
-    float z = -1.0;
-    if (int(index) == 2000) {
-        z = -1.0;
+    float point_size = 5.0;
+    int index_as_int = int(index);
+    if (selected[0] == index_as_int || selected[1] == index_as_int) {
+        point_size = 8.0;
     }
-    gl_Position = viewMatrix * vec4(position, z, 1.0);
-    gl_PointSize = 5.0;
+    gl_Position = viewMatrix * vec4(position, -1.0, 1.0);
+    gl_PointSize = point_size;
 }

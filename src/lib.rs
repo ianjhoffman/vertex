@@ -29,14 +29,18 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
     // Set up main components of the game
     let puzzle_data = geometry::PuzzleData::from_reader(&mut puzzle.as_bytes()).map_err(|e| e.to_string())?;
     let mut puzzle_state = puzzle_state::PuzzleState::from_data(&puzzle_data);
-    let graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
+    let mut graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
     let event_handler = events::EventHandler::init_from_canvas(&get_canvas()?)?;
+
+    // Frame puzzle with even padding on all sides in window
+    graphics.set_bounds(puzzle_data.get_lower_bounds(), puzzle_data.get_upper_bounds());
 
     // Set up static and dynamic geometry
     let static_geometry = puzzle_data.get_static_graphics_data();
-    let mut dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
+    let mut dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state, &None, &None);
 
     let mut last_vertex_clicked: Option<u32> = None;
+    let mut curr_pointer_position: Option<(f32, f32)> = None;
 
     // We need to do some funky stuff here to allow the animation frame
     // callback to reference itself (to request the next frame)
@@ -48,24 +52,34 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
                 for event in h.pending() {
                     match event {
                         events::Event::MouseDown(x, y) => {
-                            let unprojected = graphics.unproject(x, y);
-                            if let Some(v) = puzzle_data.get_vertex_near(unprojected.0, unprojected.1, 0.075) {
-                                if let Some(v2) = last_vertex_clicked {
-                                    puzzle_state.connect_edge(&puzzle_data, &(v, v2));
-                                    dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
-                                    last_vertex_clicked = None;
+                            last_vertex_clicked = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
+                        },
+                        events::Event::MouseMove(x, y) => {
+                            curr_pointer_position = Some(graphics.unproject(x, y));
+                        },
+                        events::Event::MouseUp(x, y) => {
+                            let maybe_v2 = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
+                            if let (Some(v1), Some(v2)) = (last_vertex_clicked.take(), maybe_v2) {
+                                if v1 == v2 {
+                                    puzzle_state.disconnect_from_vertex(&puzzle_data, v1);
                                 } else {
-                                    last_vertex_clicked = Some(v);
+                                    puzzle_state.connect_edge(&puzzle_data, &(v1, v2));
                                 }
-                            } else if last_vertex_clicked.is_some() {
-                                last_vertex_clicked = None;
                             }
                         }
                     }
                 }
             }
+        } else {
+            last_vertex_clicked = None;
+            curr_pointer_position = None;
         }
 
+        dynamic_geometry = puzzle_data.get_dynamic_graphics_data(
+            &puzzle_state,
+            &last_vertex_clicked,
+            &curr_pointer_position,
+        );
         graphics.draw(&static_geometry, &dynamic_geometry);
         request_animation_frame(f.borrow().as_ref().unwrap()).unwrap();
     }) as Box<dyn FnMut()>));
