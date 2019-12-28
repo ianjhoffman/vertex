@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
+use js_sys::WebAssembly;
 
 static TRIANGLE_VS: &'static str = include_str!("./shaders/triangle-vertex.glsl");
 static TRIANGLE_FS: &'static str = include_str!("./shaders/triangle-fragment.glsl");
@@ -43,7 +44,8 @@ impl Graphics {
         self.draw_triangles(
             &static_data.triangle_position_vertices,
             &static_data.triangle_color_idx_vertices,
-            &dynamic_data.triangle_indices
+            &dynamic_data.triangle_indices,
+            &static_data.colors_uniform,
         );
 
         self.draw_lines(&dynamic_data.line_vertices);
@@ -54,18 +56,86 @@ impl Graphics {
         );
     }
 
-    fn draw_triangles(&self, vertex_positions: &Vec<f32>, vertex_colors: &Vec<f32>, indices: &Vec<u32>) {
+    fn draw_triangles(
+        &self,
+        vertex_positions: &Vec<f32>,
+        vertex_colors: &Vec<f32>,
+        indices: &Vec<u32>,
+        colors: &Vec<f32>,
+    ) {
         let shader = self.shaders.get(&ShaderKind::Triangles).unwrap();
         self.context.use_program(Some(&shader.program));
+
+        // Set up and buffer position/color index attributes
+        let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
+        let color_attrib = self.context.get_attrib_location(&shader.program, "color") as u32;
+
+        self.buffer_f32_data(vertex_positions, pos_attrib, 2);
+        self.buffer_f32_data(vertex_colors, color_attrib, 1);
+        self.buffer_u32_indices(indices);
+
+        // Set color uniform
+        let colors_uniform = shader.get_uniform_location(&self.context, "colors");
+        self.context.uniform3fv_with_f32_array(colors_uniform, colors);
+
+        // Draw triangles
+        self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_INT, 0);
     }
 
     fn draw_lines(&self, vertices: &Vec<f32>) {
         let shader = self.shaders.get(&ShaderKind::Lines).unwrap();
         self.context.use_program(Some(&shader.program));
+
+        // TODO
+
+        self.context.draw_arrays(GL::LINES, 0, (vertices.len() >> 1) as i32);
     }
 
     fn draw_points(&self, vertex_positions: &Vec<f32>, vertex_indices: &Vec<f32>) {
         let shader = self.shaders.get(&ShaderKind::Points).unwrap();
         self.context.use_program(Some(&shader.program));
+
+        // TODO
+
+        self.context.draw_arrays(GL::POINTS, 0, vertex_indices.len() as i32);
+    }
+
+    fn buffer_f32_data(&self, data: &[f32], attrib: u32, size: i32) {
+        self.context.enable_vertex_attrib_array(attrib);
+
+        let memory_buffer = wasm_bindgen::memory()
+            .dyn_into::<WebAssembly::Memory>()
+            .unwrap()
+            .buffer();
+
+        let data_location = data.as_ptr() as u32 / 4;
+
+        let data_array = js_sys::Float32Array::new(&memory_buffer)
+            .subarray(data_location, data_location + data.len() as u32);
+
+        let buffer = self.context.create_buffer().unwrap();
+
+        self.context.bind_buffer(GL::ARRAY_BUFFER, Some(&buffer));
+        self.context.buffer_data_with_array_buffer_view(GL::ARRAY_BUFFER, &data_array, GL::STATIC_DRAW);
+        self.context.vertex_attrib_pointer_with_i32(attrib, size, GL::FLOAT, false, 0, 0);
+    }
+
+    fn buffer_u32_indices(&self, indices: &[u32]) {
+        let memory_buffer = wasm_bindgen::memory()
+            .dyn_into::<WebAssembly::Memory>()
+            .unwrap()
+            .buffer();
+
+        let indices_location = indices.as_ptr() as u32 / 2;
+        let indices_array = js_sys::Uint32Array::new(&memory_buffer)
+            .subarray(indices_location, indices_location + indices.len() as u32);
+
+        let index_buffer = self.context.create_buffer().unwrap();
+        self.context.bind_buffer(GL::ELEMENT_ARRAY_BUFFER, Some(&index_buffer));
+        self.context.buffer_data_with_array_buffer_view(
+            GL::ELEMENT_ARRAY_BUFFER,
+            &indices_array,
+            GL::STATIC_DRAW,
+        );
     }
 }

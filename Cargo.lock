@@ -113,6 +113,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "vertex"
 version = "0.1.0"
 dependencies = [
+ "js-sys 0.3.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasm-bindgen 0.2.56 (registry+https://github.com/rust-lang/crates.io-index)",
  "web-sys 0.3.33 (registry+https://github.com/rust-lang/crates.io-index)",

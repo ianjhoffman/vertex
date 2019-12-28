@@ -16,7 +16,7 @@ quick_error! {
 pub struct PuzzleData {
     vertices: Vec<(f32, f32)>, // x, y
     triangles: Vec<[u32; 4]>, // v0, v1, v2, color
-    colors: Vec<[u8; 3]>, // r, g, b
+    colors: Vec<[f32; 3]>, // r, g, b (0-1 float)
     edge_to_triangles: HashMap<(u32, u32), Vec<usize>>, // v0, v1 -> triangle indices (edge indices are sorted)
 }
 
@@ -42,9 +42,9 @@ impl PuzzleData {
                 },
                 3 => { // RGB color
                     out.colors.push([
-                        split[0].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?,
-                        split[1].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?,
-                        split[2].parse::<u8>().map_err(|_| GeometryError::InvalidColor)?
+                        split[0].parse::<u8>().map_err(|_| GeometryError::InvalidColor)? as f32 / 255.0,
+                        split[1].parse::<u8>().map_err(|_| GeometryError::InvalidColor)? as f32 / 255.0,
+                        split[2].parse::<u8>().map_err(|_| GeometryError::InvalidColor)? as f32 / 255.0
                     ]);
                 },
                 4 => { // triangle
@@ -113,7 +113,7 @@ pub struct StaticGraphicsData {
     pub triangle_color_idx_vertices: Vec<f32>,
     pub point_position_vertices: Vec<f32>,
     pub point_idx_vertices: Vec<f32>,
-    pub colors_uniform: Vec<u8>,
+    pub colors_uniform: Vec<f32>,
 }
 
 impl StaticGraphicsData {
