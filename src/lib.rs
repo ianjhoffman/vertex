@@ -36,9 +36,6 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
     let static_geometry = puzzle_data.get_static_graphics_data();
     let mut dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
 
-    web_sys::console::log_1(&format!("{:?}", static_geometry).into());
-    web_sys::console::log_1(&format!("{:?}", dynamic_geometry).into());
-
     graphics.draw(&static_geometry, &dynamic_geometry);
     return Ok(());
 

@@ -5,7 +5,6 @@ async function run_wasm() {
     fetch('/puzzles/1.txt')
         .then((res) => res.text())
         .then((text) => {
-            console.log(text);
             run(text);
         });
 }

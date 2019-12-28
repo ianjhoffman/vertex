@@ -36,21 +36,43 @@ impl Graphics {
         Ok(ret)
     }
 
+    fn get_view_matrix(left: f32, right: f32, bottom: f32, top: f32, zfar: f32, znear: f32) -> [f32; 16] {
+        let mut out = [0.0; 16];
+
+        out[0] = 2.0 / (right - left);
+        out[5] = 2.0 / (top - bottom);
+        out[10] = -2.0 / (zfar - znear);
+        out[12] = -(right + left) / (right - left);
+        out[13] = -(top + bottom) / (top - bottom);
+        out[14] = -(zfar + znear) / (zfar - znear);
+        out[15] = 1.0;
+
+        out
+    }
+
     pub fn draw(&self, static_data: &StaticGraphicsData, dynamic_data: &DynamicGraphicsData) {
         self.context.clear_color(0.5, 0.5, 0.5, 1.0);
         self.context.clear(GL::COLOR_BUFFER_BIT | GL::DEPTH_BUFFER_BIT);
         self.context.viewport(0, 0, 200, 200);
 
+        // TODO - when we start being able to change FOV, make this settable
+        let view_matrix = Graphics::get_view_matrix(-3.0, 3.0, -3.0, 3.0, 0.1, 1000.0);
+
         self.draw_triangles(
+            &view_matrix,
             &static_data.triangle_position_vertices,
             &static_data.triangle_color_idx_vertices,
             &dynamic_data.triangle_indices,
             &static_data.colors_uniform,
         );
 
-        self.draw_lines(&dynamic_data.line_vertices);
+        self.draw_lines(
+            &view_matrix,
+            &dynamic_data.line_vertices
+        );
 
         self.draw_points(
+            &view_matrix,
             &static_data.point_position_vertices,
             &static_data.point_idx_vertices,
         );
@@ -58,6 +80,7 @@ impl Graphics {
 
     fn draw_triangles(
         &self,
+        view_matrix: &[f32; 16],
         vertex_positions: &Vec<f32>,
         vertex_colors: &Vec<f32>,
         indices: &Vec<u16>,
@@ -75,15 +98,22 @@ impl Graphics {
         self.buffer_f32_data(vertex_colors, color_attrib, 1);
         self.buffer_u16_indices(indices);
 
-        // Set color uniform
+        // Set color and view matrix uniforms
         let colors_uniform = shader.get_uniform_location(&self.context, "colors");
         self.context.uniform3fv_with_f32_array(colors_uniform.as_ref(), colors);
+
+        let view_matrix_uniform = shader.get_uniform_location(&self.context, "viewMatrix");
+        self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
 
         // Draw triangles
         self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_SHORT, 0);
     }
 
-    fn draw_lines(&self, vertices: &Vec<f32>) {
+    fn draw_lines(
+        &self, 
+        view_matrix: &[f32; 16],
+        vertices: &Vec<f32>
+    ) {
         if vertices.len() == 0 { return }
 
         let shader = self.shaders.get(&ShaderKind::Lines).unwrap();
@@ -93,11 +123,20 @@ impl Graphics {
         let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
         self.buffer_f32_data(vertices, pos_attrib, 2);
 
+        // Set view matrix uniform
+        let view_matrix_uniform = shader.get_uniform_location(&self.context, "viewMatrix");
+        self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
+
         // Draw disconnected lines
         self.context.draw_arrays(GL::LINES, 0, (vertices.len() >> 1) as i32);
     }
 
-    fn draw_points(&self, vertex_positions: &Vec<f32>, vertex_indices: &Vec<f32>) {
+    fn draw_points(
+        &self, 
+        view_matrix: &[f32; 16],
+        vertex_positions: &Vec<f32>,
+        vertex_indices: &Vec<f32>
+    ){
         if vertex_indices.len() == 0 { return }
 
         let shader = self.shaders.get(&ShaderKind::Points).unwrap();
@@ -110,6 +149,10 @@ impl Graphics {
         self.buffer_f32_data(vertex_indices, idx_attrib, 1);
 
         // Later - we'll need to send a uniform for the selected vertex index
+
+        // Set view matrix uniform
+        let view_matrix_uniform = shader.get_uniform_location(&self.context, "viewMatrix");
+        self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
 
         // Draw points
         self.context.draw_arrays(GL::POINTS, 0, vertex_indices.len() as i32);
