@@ -25,10 +25,22 @@ fn get_canvas() -> Result<web_sys::HtmlCanvasElement, JsValue> {
 pub fn run(puzzle: &str) -> Result<(), JsValue> {
     let puzzle_data = geometry::PuzzleData::from_reader(&mut puzzle.as_bytes()).map_err(|e| e.to_string())?;
     let mut puzzle_state = puzzle_state::PuzzleState::from_data(&puzzle_data);
-    let mut graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
+    let graphics = display::graphics::Graphics::from_canvas(&get_canvas()?).map_err(|e| e.to_string())?;
+
+    puzzle_state.connect_edge(&puzzle_data, &(0, 1));
+    puzzle_state.connect_edge(&puzzle_data, &(1, 2));
+    puzzle_state.connect_edge(&puzzle_data, &(0, 2));
+    puzzle_state.connect_edge(&puzzle_data, &(2, 3));
+    puzzle_state.connect_edge(&puzzle_data, &(0, 3));
 
     let static_geometry = puzzle_data.get_static_graphics_data();
     let mut dynamic_geometry = puzzle_data.get_dynamic_graphics_data(&puzzle_state);
+
+    web_sys::console::log_1(&format!("{:?}", static_geometry).into());
+    web_sys::console::log_1(&format!("{:?}", dynamic_geometry).into());
+
+    graphics.draw(&static_geometry, &dynamic_geometry);
+    return Ok(());
 
     while !puzzle_state.is_finished() {
         graphics.draw(&static_geometry, &dynamic_geometry);

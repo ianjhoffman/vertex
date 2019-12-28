@@ -60,9 +60,11 @@ impl Graphics {
         &self,
         vertex_positions: &Vec<f32>,
         vertex_colors: &Vec<f32>,
-        indices: &Vec<u32>,
+        indices: &Vec<u16>,
         colors: &Vec<f32>,
     ) {
+        if indices.len() == 0 { return }
+
         let shader = self.shaders.get(&ShaderKind::Triangles).unwrap();
         self.context.use_program(Some(&shader.program));
 
@@ -71,17 +73,19 @@ impl Graphics {
         let color_attrib = self.context.get_attrib_location(&shader.program, "color") as u32;
         self.buffer_f32_data(vertex_positions, pos_attrib, 2);
         self.buffer_f32_data(vertex_colors, color_attrib, 1);
-        self.buffer_u32_indices(indices);
+        self.buffer_u16_indices(indices);
 
         // Set color uniform
         let colors_uniform = shader.get_uniform_location(&self.context, "colors");
         self.context.uniform3fv_with_f32_array(colors_uniform.as_ref(), colors);
 
         // Draw triangles
-        self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_INT, 0);
+        self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_SHORT, 0);
     }
 
     fn draw_lines(&self, vertices: &Vec<f32>) {
+        if vertices.len() == 0 { return }
+
         let shader = self.shaders.get(&ShaderKind::Lines).unwrap();
         self.context.use_program(Some(&shader.program));
 
@@ -94,6 +98,8 @@ impl Graphics {
     }
 
     fn draw_points(&self, vertex_positions: &Vec<f32>, vertex_indices: &Vec<f32>) {
+        if vertex_indices.len() == 0 { return }
+
         let shader = self.shaders.get(&ShaderKind::Points).unwrap();
         self.context.use_program(Some(&shader.program));
 
@@ -110,8 +116,6 @@ impl Graphics {
     }
 
     fn buffer_f32_data(&self, data: &[f32], attrib: u32, size: i32) {
-        self.context.enable_vertex_attrib_array(attrib);
-
         let memory_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()
             .unwrap()
@@ -127,16 +131,17 @@ impl Graphics {
         self.context.bind_buffer(GL::ARRAY_BUFFER, Some(&buffer));
         self.context.buffer_data_with_array_buffer_view(GL::ARRAY_BUFFER, &data_array, GL::STATIC_DRAW);
         self.context.vertex_attrib_pointer_with_i32(attrib, size, GL::FLOAT, false, 0, 0);
+        self.context.enable_vertex_attrib_array(attrib);
     }
 
-    fn buffer_u32_indices(&self, indices: &[u32]) {
+    fn buffer_u16_indices(&self, indices: &[u16]) {
         let memory_buffer = wasm_bindgen::memory()
             .dyn_into::<WebAssembly::Memory>()
             .unwrap()
             .buffer();
 
         let indices_location = indices.as_ptr() as u32 / 2;
-        let indices_array = js_sys::Uint32Array::new(&memory_buffer)
+        let indices_array = js_sys::Uint16Array::new(&memory_buffer)
             .subarray(indices_location, indices_location + indices.len() as u32);
 
         let index_buffer = self.context.create_buffer().unwrap();

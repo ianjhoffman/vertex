@@ -107,6 +107,7 @@ impl PuzzleData {
 }
 
 // Should only need to ever make one of these per puzzle
+#[derive(Debug)]
 pub struct StaticGraphicsData {
     pub num_vertices: usize,
     pub triangle_position_vertices: Vec<f32>,
@@ -153,8 +154,9 @@ impl StaticGraphicsData {
 }
 
 // Need to make one one of these for every frame
+#[derive(Debug)]
 pub struct DynamicGraphicsData {
-    pub triangle_indices: Vec<u32>,
+    pub triangle_indices: Vec<u16>,
     pub line_vertices: Vec<f32>,
 }
 
@@ -171,7 +173,7 @@ impl DynamicGraphicsData {
         }
 
         for &idx in state.get_unlocked_triangles() {
-            let base = idx as u32 * 3;
+            let base = idx as u16 * 3;
             out.triangle_indices.append(&mut vec![base, base + 1, base + 2]);
         }
 
