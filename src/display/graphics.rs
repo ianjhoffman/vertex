@@ -146,6 +146,7 @@ impl Graphics {
         self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
 
         // Draw disconnected lines
+        self.context.line_width(2.0);
         self.context.draw_arrays(GL::LINES, 0, (vertices.len() >> 1) as i32);
     }
 
@@ -177,7 +178,10 @@ impl Graphics {
         self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
 
         // Draw points
+        self.context.enable(GL::BLEND);
+        self.context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
         self.context.draw_arrays(GL::POINTS, 0, vertex_indices.len() as i32);
+        self.context.disable(GL::BLEND);
     }
 
     fn buffer_f32_data(&self, data: &[f32], attrib: u32, size: i32) {

@@ -18,6 +18,8 @@ pub struct PuzzleData {
     triangles: Vec<[u32; 4]>, // v0, v1, v2, color
     colors: Vec<[f32; 3]>, // r, g, b (0-1 float)
     edge_to_triangles: HashMap<(u32, u32), Vec<usize>>, // v0, v1 -> triangle indices (edge indices are sorted)
+    triangle_to_edges: HashMap<u32, [(u32, u32); 3]>,
+    vertices_to_edges: HashMap<u32, HashSet<(u32, u32)>>,
     lower_bounds: (f32, f32),
     upper_bounds: (f32, f32),
 }
@@ -29,6 +31,8 @@ impl PuzzleData {
             triangles: vec![],
             colors: vec![],
             edge_to_triangles: HashMap::new(),
+            triangle_to_edges: HashMap::new(),
+            vertices_to_edges: HashMap::new(),
             lower_bounds: (std::f32::MAX, std::f32::MAX),
             upper_bounds: (std::f32::MIN, std::f32::MIN),
         };
@@ -86,13 +90,21 @@ impl PuzzleData {
             }
         }
 
-        // Construct edge to triangle membership map
+        // Construct edge to triangle and triangle to edge membership maps
         for (idx, triangle_data) in (&out.triangles).iter().enumerate() {
             let mut sorted = triangle_data[0..3].to_vec();
             sorted.sort();
-            for (e0, e1) in vec![(sorted[0], sorted[1]), (sorted[1], sorted[2]), (sorted[0], sorted[2])] {
-                out.edge_to_triangles.entry((e0, e1)).or_insert(vec![]).push(idx);
+            let triangle_to_edges = [(sorted[0], sorted[1]), (sorted[1], sorted[2]), (sorted[0], sorted[2])];
+            for (e0, e1) in &triangle_to_edges {
+                out.edge_to_triangles.entry((*e0, *e1)).or_insert(vec![]).push(idx);
             }
+            out.triangle_to_edges.insert(idx as u32, triangle_to_edges);
+        }
+
+        // Construct vertex to edge map
+        for edge in out.edge_to_triangles.keys() {
+            out.vertices_to_edges.entry(edge.0).or_insert(HashSet::new()).insert(*edge);
+            out.vertices_to_edges.entry(edge.1).or_insert(HashSet::new()).insert(*edge);
         }
 
         Ok(out)
@@ -102,6 +114,14 @@ impl PuzzleData {
 
     pub fn triangles_with_edge(&self, edge: &(u32, u32)) -> Option<&Vec<usize>> {
         self.edge_to_triangles.get(edge)
+    }
+
+    pub fn num_edges_from_vertex(&self, vertex: u32) -> usize {
+        self.vertices_to_edges.get(&vertex).map(|v| v.len()).unwrap_or(0)
+    }
+
+    pub fn get_edges_for_triangle(&self, triangle: u32) -> Vec<(u32, u32)> {
+        self.triangle_to_edges[&triangle].to_vec()
     }
 
     pub fn is_valid_edge(&self, edge: &(u32, u32)) -> bool {

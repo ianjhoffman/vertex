@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use events::Event;
 
 fn window() -> Result<web_sys::Window, JsValue> {
     web_sys::window().ok_or("No global window exists".into())
@@ -51,13 +52,13 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
             if let Ok(mut h) = event_handler.try_borrow_mut() {
                 for event in h.pending() {
                     match event {
-                        events::Event::MouseDown(x, y) => {
+                        Event::MouseDown(x, y) => {
                             last_vertex_clicked = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
                         },
-                        events::Event::MouseMove(x, y) => {
+                        Event::MouseMove(x, y) => {
                             curr_pointer_position = Some(graphics.unproject(x, y));
                         },
-                        events::Event::MouseUp(x, y) => {
+                        Event::MouseUp(x, y) => {
                             let maybe_v2 = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
                             if let (Some(v1), Some(v2)) = (last_vertex_clicked.take(), maybe_v2) {
                                 if v1 == v2 {
@@ -66,7 +67,11 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
                                     puzzle_state.connect_edge(&puzzle_data, &(v1, v2));
                                 }
                             }
-                        }
+                        },
+                        Event::MouseLeave => {
+                            last_vertex_clicked = None;
+                            curr_pointer_position = None;
+                        },
                     }
                 }
             }

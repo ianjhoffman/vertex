@@ -7,7 +7,8 @@ use wasm_bindgen::JsCast;
 pub enum Event {
     MouseDown(i32, i32),
     MouseMove(i32, i32),
-    MouseUp(i32, i32)
+    MouseUp(i32, i32),
+    MouseLeave,
 }
 
 pub struct EventHandler {
@@ -50,6 +51,17 @@ impl EventHandler {
                 }
             }) as Box<dyn FnMut(_)>);
             canvas.add_event_listener_with_callback("mouseup", closure.as_ref().unchecked_ref())?;
+            closure.forget();
+        }
+
+        {
+            let handler = out.clone();
+            let closure = Closure::wrap(Box::new(move |_: web_sys::PointerEvent| {
+                if let Ok(mut h) = handler.try_borrow_mut() {
+                    h.add_event(Event::MouseLeave);
+                }
+            }) as Box<dyn FnMut(_)>);
+            canvas.add_event_listener_with_callback("mouseleave", closure.as_ref().unchecked_ref())?;
             closure.forget();
         }
 
