@@ -53,19 +53,25 @@ pub fn run(puzzle: &str) -> Result<(), JsValue> {
                 for event in h.pending() {
                     match event {
                         Event::MouseDown(x, y) => {
-                            last_vertex_clicked = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
+                            last_vertex_clicked = puzzle_data.get_vertex_near(
+                                &puzzle_state,
+                                graphics.unproject(x, y),
+                                0.12
+                            );
                         },
                         Event::MouseMove(x, y) => {
                             curr_pointer_position = Some(graphics.unproject(x, y));
                         },
                         Event::MouseUp(x, y) => {
-                            let maybe_v2 = puzzle_data.get_vertex_near(graphics.unproject(x, y), 0.12);
+                            let maybe_v2 = puzzle_data.get_vertex_near(&puzzle_state, graphics.unproject(x, y), 0.12);
                             if let (Some(v1), Some(v2)) = (last_vertex_clicked.take(), maybe_v2) {
                                 if v1 == v2 {
                                     puzzle_state.disconnect_from_vertex(&puzzle_data, v1);
                                 } else {
                                     puzzle_state.connect_edge(&puzzle_data, &(v1, v2));
                                 }
+                            } else {
+                                last_vertex_clicked = None;
                             }
                         },
                         Event::MouseLeave => {

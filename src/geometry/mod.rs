@@ -124,10 +124,6 @@ impl PuzzleData {
         self.triangle_to_edges[&triangle].to_vec()
     }
 
-    pub fn is_valid_edge(&self, edge: &(u32, u32)) -> bool {
-        (edge.0 as usize) < self.vertices.len() && (edge.1 as usize) < self.vertices.len()
-    }
-
     pub fn get_static_graphics_data(&self) -> StaticGraphicsData {
         StaticGraphicsData::from_data(self)
     }
@@ -141,13 +137,14 @@ impl PuzzleData {
         DynamicGraphicsData::from_data_and_state(
             self,
             state,
-            &InteractiveFeatures::from_data_and_interact_info(self, last_vertex, curr_pointer)
+            &InteractiveFeatures::from_data_and_interact_info(self, state, last_vertex, curr_pointer)
         )
     }
 
-    pub fn get_vertex_near(&self, point: (f32, f32), threshold: f32) -> Option<u32> {
+    pub fn get_vertex_near(&self, state: &PuzzleState, point: (f32, f32), threshold: f32) -> Option<u32> {
         for (idx, vertex) in (&self.vertices).iter().enumerate() {
-            if (vertex.0 - point.0).hypot(vertex.1 - point.1) <= threshold {
+            if (vertex.0 - point.0).hypot(vertex.1 - point.1) <= threshold
+            && state.should_be_interactable(self, idx as u32) {
                 return Some(idx as u32)
             }
         }
@@ -164,8 +161,6 @@ pub struct StaticGraphicsData {
     pub num_vertices: usize,
     pub triangle_position_vertices: Vec<f32>,
     pub triangle_color_idx_vertices: Vec<f32>,
-    pub point_position_vertices: Vec<f32>,
-    pub point_idx_vertices: Vec<f32>,
     pub colors_uniform: Vec<f32>,
 }
 
@@ -175,8 +170,6 @@ impl StaticGraphicsData {
             num_vertices: data.vertices.len(),
             triangle_position_vertices: vec![],
             triangle_color_idx_vertices: vec![],
-            point_position_vertices: vec![],
-            point_idx_vertices: vec![],
             colors_uniform: vec![],
         };
 
@@ -191,12 +184,6 @@ impl StaticGraphicsData {
             }
         }
 
-        for (idx, &(x, y)) in (&data.vertices).iter().enumerate() {
-            // The second attribute of a line/point vertex is which vertex it is (for highlighting)
-            out.point_position_vertices.append(&mut vec![x, y]);
-            out.point_idx_vertices.push(idx as f32);
-        }
-
         for color in &data.colors {
             out.colors_uniform.append(&mut color.to_vec());
         }
@@ -208,9 +195,12 @@ impl StaticGraphicsData {
 // Need to make one one of these for every frame
 #[derive(Debug)]
 pub struct DynamicGraphicsData {
-    pub selected_vertices: HashSet<u32>,
     pub triangle_indices: Vec<u16>,
     pub line_vertices: Vec<f32>,
+    pub point_positions: Vec<f32>,
+    pub point_uvs: Vec<f32>,
+    pub point_textures: Vec<f32>,
+    pub point_indices: Vec<u16>,
 }
 
 impl DynamicGraphicsData {
@@ -220,9 +210,12 @@ impl DynamicGraphicsData {
         interactive: &InteractiveFeatures,
     ) -> DynamicGraphicsData {
         let mut out = DynamicGraphicsData {
-            selected_vertices: interactive.selected_vertices.clone(),
             triangle_indices: vec![],
             line_vertices: vec![],
+            point_positions: vec![],
+            point_uvs: vec![],
+            point_textures: vec![],
+            point_indices: vec![],
         };
 
         for &(start, end) in state.get_connected_edges() {
@@ -239,6 +232,24 @@ impl DynamicGraphicsData {
             out.line_vertices.append(&mut vec![x1, y1, x2, y2]);
         }
 
+        let mut idx_offset = 0;
+        for (idx, &p) in (&data.vertices).iter().enumerate() {
+            let remaining = data.num_edges_from_vertex(idx as u32) - state.get_permanent_edges_for_vertex(idx as u32);
+            let non_permanent = state.get_non_permanent_edges_for_vertex(idx as u32);
+
+            // Only skip drawing a vertex if it's 100% done and it doesn't have any extra connections.
+            // If it has extra connections the player should be able to disconnect them still.
+            if remaining == 0 && non_permanent == 0 { continue }
+
+            let multiplier = if interactive.selected_vertices.contains(&(idx as u32)) { 1.5 } else { 1.0 };
+            let mut quad_data = PointQuad::new(p, idx_offset, remaining, multiplier);
+            out.point_positions.append(&mut quad_data.positions);
+            out.point_uvs.append(&mut quad_data.uvs);
+            out.point_textures.append(&mut quad_data.textures);
+            out.point_indices.append(&mut quad_data.indices);
+            idx_offset += 4;
+        }
+
         out
     }
 }
@@ -251,6 +262,7 @@ pub struct InteractiveFeatures {
 impl InteractiveFeatures {
     fn from_data_and_interact_info(
         data: &PuzzleData,
+        state: &PuzzleState,
         last_vertex: &Option<u32>,
         curr_pointer: &Option<(f32, f32)>
     ) -> InteractiveFeatures {
@@ -259,13 +271,54 @@ impl InteractiveFeatures {
             selected_vertices: HashSet::new(),
         };
 
-        let curr_pointer_vert = curr_pointer.and_then(|p| data.get_vertex_near(p, 0.12));
+        let curr_pointer_vert = curr_pointer.and_then(|p| data.get_vertex_near(state, p, 0.12));
         if let Some(v) = last_vertex { out.selected_vertices.insert(*v); }
         if let Some(v) = curr_pointer_vert { out.selected_vertices.insert(v); }
         if let (Some(v), Some(p2)) = (last_vertex, curr_pointer) {
             out.active_edge = Some((data.vertices[*v as usize], *p2));
         }
 
+        out
+    }
+}
+
+struct PointQuad {
+    positions: Vec<f32>,
+    uvs: Vec<f32>,
+    textures: Vec<f32>,
+    indices: Vec<u16>,
+}
+
+impl PointQuad {
+    fn new(center: (f32, f32), offset: u16, remaining: usize, multiplier: f32) -> PointQuad {
+        let mut out = PointQuad {
+            positions: vec![],
+            uvs: vec![],
+            textures: vec![],
+            indices: vec![
+                offset, offset + 1, offset + 2, // triangle 1
+                offset, offset + 2, offset + 3 // triangle 2
+            ],
+        };
+
+        let remaining_f = remaining as f32;
+        let half_width = multiplier * (0.07 + remaining_f * 0.015);
+
+        out.positions.append(&mut vec![
+            center.0 - half_width, center.1 - half_width, // bottom left
+            center.0 + half_width, center.1 - half_width, // bottom right
+            center.0 + half_width, center.1 + half_width, // top right
+            center.0 - half_width, center.1 + half_width, // top left
+        ]);
+
+        out.uvs.append(&mut vec![
+            0.0, 1.0, // bottom left
+            1.0, 1.0, // bottom right
+            1.0, 0.0, // top right
+            0.0, 0.0, // top left
+        ]);
+
+        out.textures.append(&mut vec![remaining_f, remaining_f, remaining_f, remaining_f]);
         out
     }
 }

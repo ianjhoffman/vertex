@@ -69,6 +69,9 @@ fn compile_shader(
     {
         Ok(shader)
     } else {
+        web_sys::console::log_1(&gl
+            .get_shader_info_log(&shader)
+            .unwrap_or_else(|| "Unknown error creating shader".to_string()).into());
         Err(GraphicsError::ShaderError)
     }
 }

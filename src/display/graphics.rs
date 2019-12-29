@@ -1,7 +1,7 @@
 use super::{error::*, shader::*};
 use super::super::geometry::{StaticGraphicsData, DynamicGraphicsData};
 use std::rc::Rc;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::WebGlRenderingContext as GL;
 use js_sys::WebAssembly;
@@ -86,9 +86,10 @@ impl Graphics {
 
         self.draw_points(
             &view_matrix,
-            &static_data.point_position_vertices,
-            &static_data.point_idx_vertices,
-            &dynamic_data.selected_vertices,
+            &dynamic_data.point_positions,
+            &dynamic_data.point_uvs,
+            &dynamic_data.point_textures,
+            &dynamic_data.point_indices,
         );
     }
 
@@ -153,34 +154,33 @@ impl Graphics {
     fn draw_points(
         &self, 
         view_matrix: &[f32; 16],
-        vertex_positions: &Vec<f32>,
-        vertex_indices: &Vec<f32>,
-        selected: &HashSet<u32>,
+        positions: &Vec<f32>,
+        uvs: &Vec<f32>,
+        textures: &Vec<f32>,
+        indices: &Vec<u16>,
     ){
-        if vertex_indices.len() == 0 { return }
+        if indices.len() == 0 { return }
 
         let shader = self.shaders.get(&ShaderKind::Points).unwrap();
         self.context.use_program(Some(&shader.program));
 
         // Set up and buffer position/index attributes
         let pos_attrib = self.context.get_attrib_location(&shader.program, "position") as u32;
-        let idx_attrib = self.context.get_attrib_location(&shader.program, "index") as u32;
-        self.buffer_f32_data(vertex_positions, pos_attrib, 2);
-        self.buffer_f32_data(vertex_indices, idx_attrib, 1);
-
-        // Set uniform for selected vertices
-        let s_padded = selected.iter().map(|&i| i as i32).chain(std::iter::repeat(-1)).take(2).collect::<Vec<i32>>();
-        let selected_vertices_uniform = shader.get_uniform_location(&self.context, "selected");
-        self.context.uniform1iv_with_i32_array(selected_vertices_uniform.as_ref(), s_padded.as_slice());
+        let uv_attrib = self.context.get_attrib_location(&shader.program, "uv") as u32;
+        let texture_attrib = self.context.get_attrib_location(&shader.program, "texture_index") as u32;
+        self.buffer_f32_data(positions, pos_attrib, 2);
+        self.buffer_f32_data(uvs, uv_attrib, 2);
+        self.buffer_f32_data(textures, texture_attrib, 1);
+        self.buffer_u16_indices(indices);
 
         // Set view matrix uniform
         let view_matrix_uniform = shader.get_uniform_location(&self.context, "viewMatrix");
         self.context.uniform_matrix4fv_with_f32_array(view_matrix_uniform.as_ref(), false, view_matrix);
 
-        // Draw points
+        // Draw point quads
         self.context.enable(GL::BLEND);
         self.context.blend_func(GL::SRC_ALPHA, GL::ONE_MINUS_SRC_ALPHA);
-        self.context.draw_arrays(GL::POINTS, 0, vertex_indices.len() as i32);
+        self.context.draw_elements_with_i32(GL::TRIANGLES, indices.len() as i32, GL::UNSIGNED_SHORT, 0);
         self.context.disable(GL::BLEND);
     }
 

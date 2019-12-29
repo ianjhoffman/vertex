@@ -1,15 +1,18 @@
 attribute vec2 position;
-attribute float index;
+attribute vec2 uv;
+attribute float texture_index;
+
+varying vec2 fragmentUV;
+varying vec3 centerColor;
 
 uniform mat4 viewMatrix;
-uniform int selected[2];
 
 void main() {
-    float point_size = 10.0;
-    int index_as_int = int(index);
-    if (selected[0] == index_as_int || selected[1] == index_as_int) {
-        point_size = 15.0;
+    fragmentUV = uv;
+    if (int(texture_index) == 0) {
+        centerColor = vec3(1.0, 0.3, 0.3);
+    } else {
+        centerColor = vec3(1.0);
     }
     gl_Position = viewMatrix * vec4(position, -1.0, 1.0);
-    gl_PointSize = point_size;
 }
